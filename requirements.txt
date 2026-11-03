@@ -1,0 +1,17 @@
+﻿# Standalone emotion-based talking head generation pipeline
+# NOTE: PyTorch + torchvision (CUDA build) must be installed separately to match your system.
+numpy<2.0.0
+pytorch-lightning==2.2.1
+torchdiffeq==0.2.5
+einops
+transformers>=4.38,<4.42
+librosa
+face_alignment==1.4.1
+av==12.0.0
+tensorboard
+timm==1.0.9
+tqdm
+huggingface_hub
+pyyaml
+opencv-python<4.10.0.0
+matplotlib<3.9.0

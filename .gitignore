@@ -1,0 +1,16 @@
+﻿# Downloaded model checkpoints (fetched automatically at runtime)
+checkpoints/
+
+# Generated videos
+emotion_talking_head_outputs/
+outputs/
+*.mp4
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
