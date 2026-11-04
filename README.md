@@ -33,6 +33,18 @@ Then run all cells in `07_emotion_talking_head_inference.ipynb`. The notebook wi
    emotion LoRA adapter -> generate)
 5. Display the talking head video(s) inline
 
+## Terminal Usage (no Jupyter)
+
+Prefer the terminal? `run_emotion_talking_head.sh` runs the complete pipeline --
+venv setup + model downloads + video generation -- with one command:
+
+```bash
+bash run_emotion_talking_head.sh              # defaults: happy emotion
+EMOTION=all bash run_emotion_talking_head.sh  # all 6 emotions
+```
+
+See [TERMINAL.md](TERMINAL.md) for all configuration options and examples.
+
 ## Configuration
 
 Edit the **CONFIGURATION** cell to set:
@@ -54,6 +66,8 @@ Videos are written to `emotion_talking_head_outputs/`.
 | Path | Description |
 |------|-------------|
 | `07_emotion_talking_head_inference.ipynb` | The standalone notebook (run this) |
+| `run_emotion_talking_head.sh` | Complete terminal pipeline script (venv setup + downloads + generation) |
+| `TERMINAL.md` | Terminal usage instructions for the shell script |
 | `generator/` | IMTalker generator source (FM, FMT, wav2vec2, generate, LoRA, options) |
 | `renderer/` | IMTalker renderer source (IMTRenderer and its modules) |
 | `assets/` | Default reference image + test audio |
