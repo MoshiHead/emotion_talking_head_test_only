@@ -53,29 +53,57 @@ def parse_args():
     return p.parse_args()
 
 
-def save_video(vid_tensor: torch.Tensor, video_path: Path, audio_path: str):
-    import torchvision
+def save_video(vid_tensor: torch.Tensor, video_path: Path, audio_path: str, fps: int = 25):
+    """Encode frames by piping raw RGB pixels straight into ffmpeg.
+
+    Does NOT use torchvision.io.write_video: recent torchvision releases
+    removed that API from the open-source package, so ffmpeg (guaranteed on
+    PATH by the notebook environment cell) is the only encoder dependency.
+    Video and audio are muxed in a single ffmpeg invocation; if the audio
+    mux fails, the video is re-encoded without audio instead of crashing.
+    """
     video_path = Path(video_path)
     video_path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
-        temp_filename = tmp.name
 
     vid = vid_tensor.permute(0, 2, 3, 1).detach().clamp(0, 1).cpu()
-    torchvision.io.write_video(temp_filename, (vid * 255).to(torch.uint8), fps=25)
+    vid = (vid * 255).to(torch.uint8).contiguous().numpy()   # [T, H, W, 3]
+    height, width = vid.shape[1], vid.shape[2]
 
-    cmd = (
-        f'ffmpeg -y -v warning -i "{temp_filename}" -i "{audio_path}" '
-        f'-c:v copy -c:a aac -shortest "{video_path}"'
-    )
-    res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-    if res.returncode == 0:
-        if os.path.exists(temp_filename):
-            os.remove(temp_filename)
-    else:
-        print(f"    [warn] ffmpeg mux failed ({res.stderr.strip()[:200]}); "
-              f"saving video without audio")
-        import shutil
-        shutil.move(temp_filename, str(video_path))
+    def encode(with_audio: bool) -> bool:
+        cmd = [
+            "ffmpeg", "-y", "-v", "error",
+            "-f", "rawvideo", "-pix_fmt", "rgb24",
+            "-s", f"{width}x{height}", "-r", str(fps), "-i", "-",
+        ]
+        if with_audio and audio_path and Path(audio_path).exists():
+            cmd += ["-i", str(audio_path), "-c:a", "aac", "-shortest"]
+        cmd += [
+            "-c:v", "libx264", "-crf", "18", "-preset", "medium",
+            "-pix_fmt", "yuv420p", str(video_path),
+        ]
+        with tempfile.TemporaryFile(mode="w+b") as err_f:
+            proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=err_f)
+            try:
+                proc.stdin.write(vid.tobytes())
+            except BrokenPipeError:
+                pass
+            try:
+                proc.stdin.close()
+            except BrokenPipeError:
+                pass
+            rc = proc.wait()
+            err_f.seek(0)
+            err = err_f.read().decode(errors="replace")
+        if rc != 0:
+            print(f"    [warn] ffmpeg encode failed: {err.strip()[:300]}")
+            return False
+        return True
+
+    if encode(with_audio=True):
+        return
+    if not encode(with_audio=False):
+        raise RuntimeError(f"ffmpeg could not encode {video_path}")
+    print("    [warn] saved video WITHOUT audio (audio mux failed)")
 
 
 def main():

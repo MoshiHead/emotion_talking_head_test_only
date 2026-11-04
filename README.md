@@ -23,10 +23,11 @@ jupyter lab   # or open 07_emotion_talking_head_inference.ipynb in VS Code
 Then run all cells in `07_emotion_talking_head_inference.ipynb`. The notebook will:
 
 1. Verify the bundled source code and locate the repository root
-2. Create a dedicated virtual environment (`venv/`) with the right CUDA PyTorch build for
-   your GPU (cu128 covers RTX 3090/4090/5090, A100, A40, A6000, L40S, H100; cu126 automatic
-   fallback) -- the same venv + subprocess architecture as the live-pipeline notebooks, so
-   the notebook kernel never imports numpy/torch and **no kernel restart is ever needed**
+2. Create a dedicated virtual environment (`venv/`) with the proven pinned stack
+   `torch==2.8.0 torchvision==0.23.0` (cu128 covers RTX 3090/4090/5090, A100, A40, A6000,
+   L40S, H100; cu126 automatic fallback) -- the same venv + subprocess architecture as the
+   live-pipeline notebooks, so the notebook kernel never imports numpy/torch and
+   **no kernel restart is ever needed**
 3. Download all required models automatically (see table below)
 4. Run `generator/test_emotions.py` inside the venv (base generator -> style LoRA merge ->
    emotion LoRA adapter -> generate)

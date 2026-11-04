@@ -152,21 +152,51 @@ class InferenceAgent:
                     param.copy_(stripped_state_dict[name].to(rank))
 
     def save_video(self, vid_tensor, video_path, audio_path):
-        with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp:
-            temp_filename = tmp.name
-            
-            vid = vid_tensor.permute(0, 2, 3, 1).detach().clamp(-1, 1).cpu()
-            vid = (vid * 255).type('torch.ByteTensor')
-            torchvision.io.write_video(temp_filename, vid, fps=self.opt.fps)
-            
-            if audio_path:
-                cmd = f"ffmpeg -i {temp_filename} -i {audio_path} -c:v copy -c:a aac {video_path} -y"
-                subprocess.call(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            else:
-                os.rename(temp_filename, video_path)
+        """Encode frames by piping raw RGB pixels into ffmpeg (video + audio
+        muxed in one pass). Does NOT use torchvision.io.write_video -- recent
+        torchvision releases removed that API from the open-source package."""
+        video_path = str(video_path)
+        os.makedirs(os.path.dirname(video_path) or ".", exist_ok=True)
 
-        if os.path.exists(video_path) and os.path.exists(temp_filename):
-            os.remove(temp_filename)
+        # Frames must be clamped to [0, 1] before the uint8 conversion --
+        # the old code clamped to [-1, 1], which produced wrapped byte values.
+        vid = vid_tensor.permute(0, 2, 3, 1).detach().clamp(0, 1).cpu()
+        vid = (vid * 255).to(torch.uint8).contiguous().numpy()
+        height, width = vid.shape[1], vid.shape[2]
+        fps = getattr(self.opt, "fps", 25)
+
+        def encode(with_audio):
+            cmd = [
+                "ffmpeg", "-y", "-v", "error",
+                "-f", "rawvideo", "-pix_fmt", "rgb24",
+                "-s", f"{width}x{height}", "-r", str(fps), "-i", "-",
+            ]
+            if with_audio and audio_path and os.path.exists(audio_path):
+                cmd += ["-i", str(audio_path), "-c:a", "aac", "-shortest"]
+            cmd += [
+                "-c:v", "libx264", "-crf", "18", "-preset", "medium",
+                "-pix_fmt", "yuv420p", video_path,
+            ]
+            with tempfile.TemporaryFile(mode="w+b") as err_f:
+                proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=err_f)
+                try:
+                    proc.stdin.write(vid.tobytes())
+                except BrokenPipeError:
+                    pass
+                try:
+                    proc.stdin.close()
+                except BrokenPipeError:
+                    pass
+                rc = proc.wait()
+                err_f.seek(0)
+                err = err_f.read().decode(errors="replace")
+            if rc != 0:
+                print(f"[warn] ffmpeg encode failed: {err.strip()[:300]}")
+                return False
+            return True
+
+        if not encode(with_audio=True) and not encode(with_audio=False):
+            raise RuntimeError(f"ffmpeg could not encode {video_path}")
         return video_path
 
     @torch.no_grad()
