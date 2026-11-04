@@ -1,4 +1,4 @@
-﻿# Downloaded model checkpoints (fetched automatically at runtime)
+# Downloaded model checkpoints (fetched automatically at runtime)
 checkpoints/
 
 # Generated videos
@@ -7,6 +7,7 @@ outputs/
 *.mp4
 
 # Python
+venv/
 __pycache__/
 *.py[cod]
 .ipynb_checkpoints/

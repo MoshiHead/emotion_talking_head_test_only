@@ -47,6 +47,9 @@ def parse_args():
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--emotions", nargs="*", default=None,
                    help="Specific emotions to test, e.g. --emotions happy sad angry")
+    p.add_argument("--crop", action="store_true",
+                   help="Use face-alignment cropping instead of plain 512x512 resize "
+                        "(keep OFF for robot / non-human faces)")
     return p.parse_args()
 
 
@@ -65,11 +68,14 @@ def save_video(vid_tensor: torch.Tensor, video_path: Path, audio_path: str):
         f'-c:v copy -c:a aac -shortest "{video_path}"'
     )
     res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-    if os.path.exists(temp_filename):
-        os.remove(temp_filename)
-    if res.returncode != 0:
+    if res.returncode == 0:
+        if os.path.exists(temp_filename):
+            os.remove(temp_filename)
+    else:
+        print(f"    [warn] ffmpeg mux failed ({res.stderr.strip()[:200]}); "
+              f"saving video without audio")
         import shutil
-        shutil.copy2(temp_filename, video_path)
+        shutil.move(temp_filename, str(video_path))
 
 
 def main():
@@ -176,7 +182,7 @@ def main():
     print(f"Reference image: {ref_path}")
     print(f"Audio file:      {aud_path}")
 
-    data = data_processor.preprocess(str(ref_path), str(aud_path), crop=False)
+    data = data_processor.preprocess(str(ref_path), str(aud_path), crop=args.crop)
     s = data["s"].to(device)
     f_r, g_r = renderer.dense_feature_encoder(s)
     t_r = renderer.latent_token_encoder(s)
@@ -202,12 +208,20 @@ def main():
     # Determine which emotions to render
     if args.emotions:
         test_eids = []
+        invalid = []
         for e in args.emotions:
             e_clean = e.strip().lower()
-            if e_clean.isdigit():
+            if e_clean.isdigit() and int(e_clean) in EMOTION_MAP.values():
                 test_eids.append(int(e_clean))
             elif e_clean in EMOTION_MAP:
                 test_eids.append(EMOTION_MAP[e_clean])
+            else:
+                invalid.append(e)
+        if invalid:
+            raise ValueError(
+                f"Unknown emotion(s): {invalid}. "
+                f"Valid: {list(EMOTION_MAP)} or ids {list(EMOTION_MAP.values())}"
+            )
     else:
         test_eids = [0, 1, 2, 3, 4, 5]  # all 6 emotions
 

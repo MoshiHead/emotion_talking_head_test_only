@@ -23,12 +23,14 @@ jupyter lab   # or open 07_emotion_talking_head_inference.ipynb in VS Code
 Then run all cells in `07_emotion_talking_head_inference.ipynb`. The notebook will:
 
 1. Verify the bundled source code and locate the repository root
-2. Set up the environment -- installs the right CUDA PyTorch build for your GPU
-   (cu128 covers RTX 3090/4090/5090, A100, A40, A6000, L40S, H100; cu126 automatic fallback;
-   preinstalled RunPod PyTorch builds are used as-is)
+2. Create a dedicated virtual environment (`venv/`) with the right CUDA PyTorch build for
+   your GPU (cu128 covers RTX 3090/4090/5090, A100, A40, A6000, L40S, H100; cu126 automatic
+   fallback) -- the same venv + subprocess architecture as the live-pipeline notebooks, so
+   the notebook kernel never imports numpy/torch and **no kernel restart is ever needed**
 3. Download all required models automatically (see table below)
-4. Load the avatar (base generator -> style LoRA merge -> emotion LoRA adapter)
-5. Generate the talking head video
+4. Run `generator/test_emotions.py` inside the venv (base generator -> style LoRA merge ->
+   emotion LoRA adapter -> generate)
+5. Display the talking head video(s) inline
 
 ## Configuration
 
@@ -57,6 +59,7 @@ Videos are written to `emotion_talking_head_outputs/`.
 | `requirements.txt` | Python dependencies |
 | `checkpoints/` | Created at runtime -- downloaded models land here (git-ignored) |
 | `emotion_talking_head_outputs/` | Created at runtime -- generated videos land here (git-ignored) |
+| `venv/` | Created at runtime -- the dedicated virtual environment (git-ignored) |
 
 ## Models Downloaded Automatically
 
@@ -82,9 +85,16 @@ Videos are written to `emotion_talking_head_outputs/`.
 
 - `EMOTION_LORA_RANK = 32` / `EMOTION_LORA_ALPHA = 64.0` must match the training values.
 - Keep `CROP = False` for robot / non-human faces (skips face-alignment cropping).
-- Changing only the emotion requires re-running just the Generate cell -- models stay loaded
-  in memory.
-- Requires a CUDA GPU, `ffmpeg` on PATH (preinstalled on RunPod images), and ~2 GB of disk
-  space for model downloads.
-- CLI alternative: `python generator/test_emotions.py --checkpoint checkpoints/emotion_lora/last.ckpt
+- Changing the emotion / inputs: edit the CONFIGURATION cell, then re-run the Generate cell.
+  The model reloads each run (same behaviour as the CLI script).
+- **No kernel restarts / no NumPy 2.x issues**: all heavy work runs inside the dedicated
+  `venv/` (created by the environment cell) as a subprocess -- the notebook kernel never
+  imports numpy/torch/cv2. The venv pins `numpy<2.0.0` and `scipy<1.13` and verifies the
+  full import stack (cv2, scipy, librosa, matplotlib, face_alignment, torchdiffeq) with
+  automatic repairs, so even a NumPy 2.x base image works on the first top-to-bottom run.
+- **First run**: creating the venv downloads PyTorch (~3 GB) plus dependencies -- a few
+  minutes, only once. The venv and checkpoints persist on RunPod volumes.
+- Requires a CUDA GPU, `ffmpeg` on PATH (preinstalled on RunPod images), and ~8 GB of disk
+  space (venv + model downloads).
+- CLI alternative: `venv/bin/python generator/test_emotions.py --checkpoint checkpoints/emotion_lora/last.ckpt
   --ref_img assets/3robert.jpeg --audio assets/audio_3.wav --out_dir outputs --cfg 3.0`
