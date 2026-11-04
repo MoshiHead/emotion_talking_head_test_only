@@ -13,8 +13,12 @@ class LoRALinear(nn.Module):
         self.alpha = float(alpha)
         self.scale = self.alpha / max(1, self.rank)
         self.dropout = nn.Dropout(float(dropout)) if float(dropout) > 0 else nn.Identity()
-        self.lora_A = nn.Linear(base.in_features, self.rank, bias=False)
-        self.lora_B = nn.Linear(self.rank, base.out_features, bias=False)
+        # Create the LoRA layers on the SAME device/dtype as the base layer --
+        # the base model may already live on the GPU when LoRA is applied.
+        self.lora_A = nn.Linear(base.in_features, self.rank, bias=False).to(
+            base.weight.device, base.weight.dtype)
+        self.lora_B = nn.Linear(self.rank, base.out_features, bias=False).to(
+            base.weight.device, base.weight.dtype)
         nn.init.kaiming_uniform_(self.lora_A.weight, a=5 ** 0.5)
         nn.init.zeros_(self.lora_B.weight)
 

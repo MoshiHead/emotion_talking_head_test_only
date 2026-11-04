@@ -153,6 +153,7 @@ def main():
     e_state = {k.replace("model.", "", 1) if k.startswith("model.") else k: v for k, v in e_raw.items()}
     missing, unexpected = model.load_state_dict(e_state, strict=False)
     print(f"Loaded emotion checkpoint: {Path(args.checkpoint).name} (missing={len(missing)}, unexpected={len(unexpected)})")
+    model.to(device)   # guarantee every parameter (incl. LoRA layers) is on the GPU
     model.eval()
 
     # Load Renderer & Wav2Vec
